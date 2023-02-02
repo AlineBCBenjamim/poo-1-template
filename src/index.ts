@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express'
 import cors from 'cors'
 import { TAccountDB, TAccountDBPost, TUserDB, TUserDBPost } from './types'
 import { db } from './database/knex'
+import { User } from './models/User'
+import { Account } from './models/Account'
 
 const app = express()
 
@@ -44,7 +46,30 @@ app.get("/users", async (req: Request, res: Response) => {
             usersDB = result
         }
 
-        res.status(200).send(usersDB)
+
+
+// Prática 2
+  // aqui mapeamos o array de usertsDB (resultado na nossa busca)
+        // para cada item do array usersDB instanciamos um ojbeto User (new User(propriedades))
+        // passando o valor do item do banco de dados como propriedade do novo objeto
+        // assim, 
+        // 
+        // new User (
+        //     id: usersDB.id
+        //     ... cada propriedade do objeto recebe o mesmo valor do DB ... 
+        // )
+        // por fim, enviamos uma lista de instancias 'users' para o postman;
+
+        const users: User[] = usersDB.map((userDB) =>
+        new User(
+            userDB.id,
+            userDB.name,
+            userDB.email,
+            userDB.password,
+            userDB.created_at
+        ))
+
+        res.status(200).send(users)
     } catch (error) {
         console.log(error)
 
@@ -91,17 +116,34 @@ app.post("/users", async (req: Request, res: Response) => {
             throw new Error("'id' já existe")
         }
 
-        const newUser: TUserDBPost = {
+//Prática 3
+// Refatore o endpoint POST /users
+// agora a API será responsável por criar 
+// as datas para facilitar o instanciamento de User
+// a resposta deve ser uma instância de User
+
+        const newUser = new User (
             id,
             name,
             email,
-            password
-        }
+            password,
+            new Date().toISOString()
+        )
 
-        await db("users").insert(newUser)
+//2.Objeto simples para modelar as infos para o banco de dados
+
+            const newUserDB: TUserDB ={
+                id: newUser.getId(),
+                name: newUser.getName(),
+                email: newUser.getEmail(),
+                password: newUser.getPassword(),
+                created_at: newUser.getCreatedAt()
+            }
+
+        await db("users").insert(newUserDB)
         const [ userDB ]: TUserDB[] = await db("users").where({ id })
 
-        res.status(201).send(userDB)
+        res.status(201).send(newUser)
     } catch (error) {
         console.log(error)
 
@@ -121,7 +163,14 @@ app.get("/accounts", async (req: Request, res: Response) => {
     try {
         const accountsDB: TAccountDB[] = await db("accounts")
 
-        res.status(200).send(accountsDB)
+        const accounts: Account[] = accountsDB.map((account)=> new Account(
+            account.id,
+            account.balance,
+            account.owner_id,
+            account.created_at
+        ))
+
+        res.status(200).send(accounts)
     } catch (error) {
         console.log(error)
 
@@ -147,8 +196,14 @@ app.get("/accounts/:id/balance", async (req: Request, res: Response) => {
             res.status(404)
             throw new Error("'id' não encontrado")
         }
+        const account = new Account(
+            accountDB.id,
+            accountDB.balance,
+            accountDB.owner_id,
+            accountDB.created_at
+        )
+            res.status(200).send({balance: account.getBalance()})
 
-        res.status(200).send({ balance: accountDB.balance })
     } catch (error) {
         console.log(error)
 
@@ -161,6 +216,7 @@ app.get("/accounts/:id/balance", async (req: Request, res: Response) => {
         } else {
             res.send("Erro inesperado")
         }
+
     }
 })
 
@@ -186,15 +242,24 @@ app.post("/accounts", async (req: Request, res: Response) => {
             throw new Error("'id' já existe")
         }
 
-        const newAccount: TAccountDBPost = {
+        const newAccount = new Account (
             id,
-            owner_id: ownerId
+            0,
+            ownerId,
+            new Date().toISOString()
+        )
+
+        const newAccountDB: TAccountDB ={
+            id: newAccount.getId(),
+            balance: newAccount.getBalance(),
+            owner_id: newAccount.getOwerId(),
+            created_at: newAccount.getCreatedAt()
         }
 
-        await db("accounts").insert(newAccount)
+        await db("accounts").insert(newAccountDB)
         const [ accountDB ]: TAccountDB[] = await db("accounts").where({ id })
 
-        res.status(201).send(accountDB)
+        res.status(201).send(newAccount)
     } catch (error) {
         console.log(error)
 
@@ -227,11 +292,17 @@ app.put("/accounts/:id/balance", async (req: Request, res: Response) => {
             throw new Error("'id' não encontrado")
         }
 
-        accountDB.balance += value
-
-        await db("accounts").update({ balance: accountDB.balance }).where({ id })
+        const accountToEdit = new Account(
+            accountDB.id,
+            accountDB.balance += value,
+            accountDB.owner_id,
+            accountDB.created_at
+        )
+        console.log(accountToEdit);
         
-        res.status(200).send(accountDB)
+        await db("accounts").update({ balance: accountToEdit.getBalance() }).where({ id })
+        
+        res.status(200).send(accountToEdit)
     } catch (error) {
         console.log(error)
 
